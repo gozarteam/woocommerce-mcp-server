@@ -1,7 +1,7 @@
 // server.ts
 import express from 'express';
 import cors from 'cors';
-import { handleWooCommerceRequest } from './mcp-core';
+import { handleWooCommerceRequest } from './mcp-core.js';
 
 const app = express();
 app.use(cors());
