@@ -4,11 +4,11 @@
     "module": "ES2020",
     "moduleResolution": "node",
     "esModuleInterop": true,
-    "strict": true,
     "outDir": "build",
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "noImplicitAny":false
+    "noImplicitAny": false,
+    "strict": false
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "build"]

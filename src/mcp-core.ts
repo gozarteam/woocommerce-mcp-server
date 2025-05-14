@@ -138,7 +138,7 @@ export async function handleWooCommerceRequest(method: string, params: any): Pro
                 if (!params.postId) {
                     throw new Error('Post ID is required for updating a post');
                 }
-                const updateData = {};
+                const updateData: Record<string, any> = {};
                 if (params.title)
                     updateData.title = params.title;
                 if (params.content)

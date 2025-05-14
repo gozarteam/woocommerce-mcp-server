@@ -1,43 +1,81 @@
-// server.ts
-import express from 'express';
-import cors from 'cors';
-import { handleWooCommerceRequest } from './mcp-core.js';
+import express from "express";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
+import { z } from "zod";
+import { handleWooCommerceRequest } from "./mcp-core.js"; // ✅ your existing logic
 
 const app = express();
-app.use(cors());
-app.use(express.json());
+const server = new McpServer({
+  name: "woocommerce-mcp",
+  version: "1.0.0"
+});
 
-app.get('/events', async (req, res) => {
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
+// 🛠️ Tool: JSON-RPC wrapper over WooCommerce API
+server.tool(
+  "woocommerce",
+  {
+    method: z.string(),
+    params: z.record(z.any())
+  },
+  async (args) => {
+    const { method, params } = args;
 
-  const sendEvent = (id: string, data: any) => {
-    res.write(`id: ${id}\n`);
-    res.write(`data: ${JSON.stringify(data)}\n\n`);
-  };
-
-  const method = req.query.method as string;
-  const rawParams = req.query.params as string;
-
-  if (!method || !rawParams) {
-    sendEvent('error', { error: 'Missing method or params' });
-    return res.end();
+    try {
+      const result = await handleWooCommerceRequest(method, params);
+      return {
+        content: [
+          {
+            type: "resource",
+            resource: {
+              mimeType: "application/json",
+              text: JSON.stringify(result)
+            }
+          }
+        ]
+      };
+    } catch (err: any) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `❌ Error: ${err.message || "Unknown error"}`
+          }
+        ]
+      };
+    }
   }
+);
 
-  try {
-    const params = JSON.parse(rawParams);
-    const result = await handleWooCommerceRequest(method, params);
-    sendEvent('result', { result });
-  } catch (err: any) {
-    sendEvent('error', { message: err.message || 'Unknown error' });
+
+// SSE setup
+const transports: { [sessionId: string]: SSEServerTransport } = {};
+
+app.get("/sse", async (req, res) => {
+  const transport = new SSEServerTransport("/messages", res);
+  transports[transport.sessionId] = transport;
+
+  console.log("SSE session started:", transport.sessionId);
+
+  res.on("close", () => {
+    console.log("SSE session closed:", transport.sessionId);
+    delete transports[transport.sessionId];
+  });
+
+  await server.connect(transport);
+});
+
+app.post("/messages", async (req, res) => {
+  const sessionId = req.query.sessionId as string;
+  const transport = transports[sessionId];
+
+  if (transport) {
+    await transport.handlePostMessage(req, res);
+  } else {
+    res.status(400).send("No transport found for sessionId");
   }
-
-  // Close connection (for long polling, remove this line and stream multiple updates)
-  res.end();
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`SSE server running at http://localhost:${PORT}`);
+  console.log(`✅ WooCommerce MCP server running on port ${PORT}`);
 });
